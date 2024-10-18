@@ -17,20 +17,22 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import random
-from torch.utils.hipify.hipify_python import value
-
+from save_data import *
+from uis.dialog_window import *
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.data = [0] * 100
+        self.data = [0]*50
         self.setWindowTitle("串口数据可视化")
         self.setGeometry(100, 100, 800, 600)
         self.serial_port = None
-         # 初始化数据缓冲区
+        # 初始化数据缓冲区
         # 主控件
         mainWidget = QWidget()
         self.setCentralWidget(mainWidget)
+        self.t=threading.Thread(target=self.save_data)
+
 
         # 布局
         layout = QVBoxLayout()
@@ -46,6 +48,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.button)
         self.button.clicked.connect(self.open_serial_port)
 
+        #弹出图像的按钮
+        self.demo_button = QPushButton('点击我弹出窗口')
+        layout.addWidget(self.demo_button)
+        self.demo_button.clicked.connect(self.on_button_clicked)
+
+        #保存数据按钮
+        self.save_button = QPushButton("保存数据")
+        layout.addWidget(self.save_button)
+        self.save_button.clicked.connect(self.save_data)
+
         # 用于显示数据的Matplotlib图表
         self.canvas = FigureCanvas(Figure(figsize=(5, 3)))
         layout.addWidget(self.canvas)
@@ -53,7 +65,6 @@ class MainWindow(QMainWindow):
 
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_plot)
-
 
     def update_ports(self):
         self.combobox.clear()
@@ -78,11 +89,16 @@ class MainWindow(QMainWindow):
         #         value = 0
         # else:
         #     value = 0
-        value=random.randint(0,100)
-        if len(self.data)<=50000:
+        value = random.randint(0, 100)
+        if len(self.data) <= 50000:
             self.data = self.data + [value]  # 更新数据
         else:
             self.data = self.data[1:] + [value]
         self.ax.clear()
         self.ax.plot(self.data)
         self.canvas.draw()
+    def save_data(self):
+        write_data(self.data)
+    def on_button_clicked(self):
+        dialog = PopupDialog()
+        dialog.exec_()
