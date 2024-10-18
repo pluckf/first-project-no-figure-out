@@ -97,8 +97,9 @@ class MainWindow(QMainWindow):
         self.ax.clear()
         self.ax.plot(self.data)
         self.canvas.draw()
+
     def save_data(self):
         write_data(self.data)
     def on_button_clicked(self):
-        dialog = PopupDialog()
-        dialog.exec_()
+        self.pic = PicWindow()
+        self.pic.show()
