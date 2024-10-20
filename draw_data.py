@@ -13,5 +13,5 @@ def draw_data(filename):
         print(f"文件 {filename} 未找到。")
     except Exception as e:
         print(f"读取文件时发生错误：{e}")
-draw_data(filename = "./data/1729403814.txt")
+draw_data(filename = "./data/1729412869.txt")
 

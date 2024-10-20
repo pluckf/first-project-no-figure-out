@@ -30,6 +30,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("串口数据可视化")
         self.setGeometry(100, 100, 1000, 800)
         self.serial_port = None
+        self.cnt=True
         # 初始化数据缓冲区
         # 主控件
         mainWidget = QWidget()
@@ -45,7 +46,6 @@ class MainWindow(QMainWindow):
         # 串口选择下拉菜单
         self.combobox = QComboBox()
         layout.addWidget(self.combobox)
-        self.update_ports()
 
         # 打开串口按钮
         self.button = QPushButton("打开串口")
@@ -62,6 +62,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.save_button)
         self.save_button.clicked.connect(self.save_data)
 
+        # 更新检测串口
+        self.refresh_button = QPushButton("更新设备")
+        layout.addWidget(self.refresh_button)
+        self.refresh_button.clicked.connect(self.update_ports)
+
         # 用于显示数据的Matplotlib图表
         self.canvas = FigureCanvas(Figure(figsize=(5, 3)))
         layout.addWidget(self.canvas)
@@ -69,24 +74,39 @@ class MainWindow(QMainWindow):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_plot)
 
-    def update_ports(self):
-        self.combobox.clear()
-        ports = serial.tools.list_ports.comports()
-        for port in ports:
+        # 将串口添加到拉选框中
+        self.ports = serial.tools.list_ports.comports()
+        for port in self.ports:
             self.combobox.addItem(port.device)
 
+    def update_ports(self):
+        # 更新串口号
+        ports = serial.tools.list_ports.comports()
+        if ports != self.ports:
+            self.combobox.clear()
+            for port in ports:
+                self.combobox.addItem(port.device)
+
     def open_serial_port(self):
-        port = self.combobox.currentText()
-        self.t.start()
-        try:
-            self.serial_port = serial.Serial(port, 115200)
-            print("打开成功")
-        except:
-            print("无法打开串口")
-        self.timer.start(20)  # 每20ms更新一次图表
+        if self.serial_port == None:
+            port = self.combobox.currentText()
+            if self.cnt:
+                self.t.start()
+                self.cnt=False
+            try:
+                self.serial_port = serial.Serial(port, 115200)
+                print("打开成功")
+                self.button.setText("关闭串口")
+            except:
+                print("无法打开串口")
+            self.timer.start(30)  # 每20ms更新一次图表
+        else:
+            self.button.setText("打开串口")
+            self.serial_port = None
+            self.timer.stop()
 
     def update_plot(self):
-        self.data=self.buff
+        self.data = self.buff
         self.ax.clear()
         self.ax.plot(self.data)
         self.canvas.draw()
