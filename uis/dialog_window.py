@@ -14,6 +14,7 @@ class PicWindow(QMainWindow):
 
         #创建主窗口
         mainWidget = QWidget()
+        self.setGeometry(200,200,800,600)
         self.setCentralWidget(mainWidget)
         layout = QVBoxLayout()
         mainWidget.setLayout(layout)
@@ -23,8 +24,6 @@ class PicWindow(QMainWindow):
         self.button = QPushButton("点我")
         layout.addWidget(self.button)
         self.button.clicked.connect(self.open_serial_port)
-
-
         #创建画布
         self.canvas = FigureCanvas(Figure(figsize=(5, 3)))
         layout.addWidget(self.canvas)
@@ -35,7 +34,7 @@ class PicWindow(QMainWindow):
 
     def update_plot(self):
         value = random.randint(0, 100)
-        if len(self.data) <= 50000:
+        if len(self.data) <= 10000:
             self.data = self.data + [value]  # 更新数据
         else:
             self.data = self.data[1:] + [value]
@@ -45,15 +44,6 @@ class PicWindow(QMainWindow):
 
     def open_serial_port(self):
         self.timer.start(50)
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
