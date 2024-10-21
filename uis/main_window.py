@@ -18,19 +18,24 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import random
+
+from scipy.constants import value
+
 from save_data import *
 from uis.dialog_window import *
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
 class WorkerThread(QThread):
-    def __init__(self, serial_port):
+    def __init__(self, serial_port,nums):
         super(WorkerThread, self).__init__(None)
         self.running = False
-        self.buff = [0]
+        self.buff = []
+        self.nums=nums
         self.serial_port = serial_port
         self.btn_clicked = pyqtSignal()
-
+        for i in range(self.nums):
+            self.buff.append([])
     def run(self):
         while self.running:
             if self.serial_port:
@@ -40,12 +45,15 @@ class WorkerThread(QThread):
                         if data:
                             data = data[2:]
                             data = data[0:-2]
-                            value = float(data)
-                            if len(self.buff) <= 10000:
-                                self.buff += [value]
-                            else:
-                                self.buff = self.buff[1:]
-                                self.buff += [value]
+                            data=data.split(',')
+                            for i in range(self.nums):
+                                _value=float(data[i])
+                                if len(self.buff[i]) <= 10000:
+                                    self.buff[i] += [_value]
+                                else:
+                                    self.buff[i] = self.buff[1:]
+                                    self.buff[i] += [_value]
+
                 except:
                     self.stop_thread()
 
@@ -70,15 +78,16 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.pic = None
-        self.buff = [0]
-        self.data = [0]
+        self.buff = []
+        self.data = []
         self.setWindowTitle("串口数据可视化")
         self.setGeometry(100, 100, 1000, 800)
         self.serial_port = None
         self.cnt = 0
         self.bits = ["115200", "2400", "4800", "9600", "19200", "38400", "57600"]
-        self.last_data = [0]
+        self.last_data = []
         self.t = None
+        self.nums=0
         # 初始化数据缓冲区
         # 主控件
         mainWidget = QWidget()
@@ -136,25 +145,39 @@ class MainWindow(QMainWindow):
             self.combobox.addItem(port.device)
 
     def open_serial_port(self):
+        self.cnt+=1
         if not self.serial_port:
             port = self.combobox.currentText()
             bit = self.bit_cm.currentText()
-            self.serial_port = serial.Serial("com15", 115200, timeout=3)
+            try:
+                self.serial_port = serial.Serial("com15", 115200, timeout=3)
+            except:
+                print("弹出错误窗口")
             if self.serial_port:
                 print("打开成功")
             else:
                 print("打开失败")
-            self.t = WorkerThread(self.serial_port)
-            # self.t.btn_clicked.connect(self.open_serial_port)
+            #根据数据个数声明数据
+            if self.cnt==1:
+                if self.serial_port.isOpen():
+                    data = self.serial_port.readline().decode().strip()
+                    # 读取数据确定数据长度
+                    if data:
+                        data = data[2:]
+                        data = data[0:-2]
+                        data = data.split(",")
+                        self.nums = len(data)
+                for i in range(self.nums):
+                    self.data.append([])
+                    self.last_data.append([])
+            self.t = WorkerThread(self.serial_port, self.nums)
             self.t.start_thread()
             self.button.setText("关闭串口")
             self.timer.start(20)  # 每20ms更新一次图表
-            # self.timer1.start(500);
-
-
         else:
             self.button.setText("打开串口")
-            self.last_data = self.data
+            for i in range(self.nums):
+                self.last_data[i] = self.data[i]
             self.t.stop_thread()
             self.t.wait()
             self.serial_port.close()
@@ -162,9 +185,9 @@ class MainWindow(QMainWindow):
             self.timer.stop()
 
     def update_plot(self):
-        self.data = self.last_data + self.t.buff
+        self.data[0] = self.last_data[0] + self.t.buff[0]
         self.ax.clear()
-        self.ax.plot(self.data)
+        self.ax.plot(self.data[0])
         self.canvas.draw()
 
     def save_data(self):
@@ -174,18 +197,4 @@ class MainWindow(QMainWindow):
         self.pic = PicWindow()
         self.pic.show()
 
-    def store_data(self):
-        while self.start:
-            if self.serial_port and self.serial_port.isOpen():
-                try:
-                    data = self.serial_port.readline().decode().strip()
-                    data = data[2:]
-                    data = data[0:-2]
-                    value = float(data)
-                    if len(self.buff) <= 10000:
-                        self.buff += [value]
-                    else:
-                        self.buff = self.buff[1:]
-                        self.buff += [value]
-                except:
-                    print("还没有数据")
+
