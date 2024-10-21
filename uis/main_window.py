@@ -2,6 +2,7 @@ import sys
 import serial
 import serial.tools.list_ports
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QComboBox, QPushButton, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -19,6 +20,40 @@ import threading
 import random
 from save_data import *
 from uis.dialog_window import *
+from PyQt5.QtCore import QThread
+
+
+class WorkerThread(QThread):
+    def __init__(self, serial_port):
+        super(WorkerThread, self).__init__(None)
+        self.running = False
+        self.buff = [0]
+        self.serial_port = serial_port
+
+    def run(self):
+        while self.running:
+            if self.serial_port and self.serial_port.isOpen():
+                try:
+                    data = self.serial_port.readline().decode().strip()
+                    if data:
+                        data = data[2:]
+                        data = data[0:-2]
+                        value = float(data)
+                        if len(self.buff) <= 10000:
+                            self.buff += [value]
+                        else:
+                            self.buff = self.buff[1:]
+                            self.buff += [value]
+                except:
+                    print("无数据")
+
+    def start_thread(self):
+        self.running = True
+        if not self.isRunning():
+            self.start()
+
+    def stop_thread(self):
+        self.running = False
 
 
 class MainWindow(QMainWindow):
@@ -26,18 +61,19 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.pic = None
         self.buff = [0]
-        self.data = [0] * 50
+        self.data = [0]
         self.setWindowTitle("串口数据可视化")
         self.setGeometry(100, 100, 1000, 800)
         self.serial_port = None
-        self.cnt=True
+        self.cnt = 0
+        self.bits = ["115200", "2400", "4800", "9600", "19200", "38400", "57600"]
+        self.last_data=[0]
         # 初始化数据缓冲区
         # 主控件
         mainWidget = QWidget()
         self.setCentralWidget(mainWidget)
 
         # 接收存储函数，防止遗漏数据
-        self.t = threading.Thread(target=self.store_data)
 
         # 布局
         layout = QVBoxLayout()
@@ -46,6 +82,10 @@ class MainWindow(QMainWindow):
         # 串口选择下拉菜单
         self.combobox = QComboBox()
         layout.addWidget(self.combobox)
+
+        self.bit_cm = QComboBox()
+        layout.addWidget(self.bit_cm)
+        self.update_bit()
 
         # 打开串口按钮
         self.button = QPushButton("打开串口")
@@ -79,6 +119,10 @@ class MainWindow(QMainWindow):
         for port in self.ports:
             self.combobox.addItem(port.device)
 
+    def update_bit(self):
+        for bit in self.bits:
+            self.bit_cm.addItem(bit)
+
     def update_ports(self):
         # 更新串口号
         ports = serial.tools.list_ports.comports()
@@ -88,25 +132,27 @@ class MainWindow(QMainWindow):
                 self.combobox.addItem(port.device)
 
     def open_serial_port(self):
-        if self.serial_port == None:
+        if not self.serial_port:
             port = self.combobox.currentText()
-            if self.cnt:
-                self.t.start()
-                self.cnt=False
-            try:
-                self.serial_port = serial.Serial(port, 115200)
-                print("打开成功")
-                self.button.setText("关闭串口")
-            except:
-                print("无法打开串口")
-            self.timer.start(30)  # 每20ms更新一次图表
+            bit = self.bit_cm.currentText()
+            self.serial_port = serial.Serial("com15", 115200, timeout=3)
+            print("打开成功")
+            self.t = WorkerThread(self.serial_port)
+            self.t.start_thread()
+            self.button.setText("关闭串口")
+            self.timer.start(20)  # 每20ms更新一次图表
         else:
             self.button.setText("打开串口")
+            self.last_data=self.data
+            self.t.stop_thread()
+            self.t.wait()
+            self.serial_port.close()
             self.serial_port = None
             self.timer.stop()
 
+
     def update_plot(self):
-        self.data = self.buff
+        self.data =self.last_data+self.t.buff
         self.ax.clear()
         self.ax.plot(self.data)
         self.canvas.draw()
@@ -119,8 +165,8 @@ class MainWindow(QMainWindow):
         self.pic.show()
 
     def store_data(self):
-        while True:
-            if self.serial_port and self.serial_port.is_open:
+        while self.start:
+            if self.serial_port and self.serial_port.isOpen():
                 try:
                     data = self.serial_port.readline().decode().strip()
                     data = data[2:]
