@@ -20,7 +20,7 @@ import threading
 import random
 from save_data import *
 from uis.dialog_window import *
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QThread, pyqtSignal
 
 
 class WorkerThread(QThread):
@@ -29,23 +29,25 @@ class WorkerThread(QThread):
         self.running = False
         self.buff = [0]
         self.serial_port = serial_port
+        self.btn_clicked = pyqtSignal()
 
     def run(self):
         while self.running:
-            if self.serial_port and self.serial_port.isOpen():
+            if self.serial_port:
                 try:
-                    data = self.serial_port.readline().decode().strip()
-                    if data:
-                        data = data[2:]
-                        data = data[0:-2]
-                        value = float(data)
-                        if len(self.buff) <= 10000:
-                            self.buff += [value]
-                        else:
-                            self.buff = self.buff[1:]
-                            self.buff += [value]
+                    if self.serial_port.isOpen():
+                        data = self.serial_port.readline().decode().strip()
+                        if data:
+                            data = data[2:]
+                            data = data[0:-2]
+                            value = float(data)
+                            if len(self.buff) <= 10000:
+                                self.buff += [value]
+                            else:
+                                self.buff = self.buff[1:]
+                                self.buff += [value]
                 except:
-                    print("无数据")
+                    self.stop_thread()
 
     def start_thread(self):
         self.running = True
@@ -54,6 +56,14 @@ class WorkerThread(QThread):
 
     def stop_thread(self):
         self.running = False
+
+
+class PortBox(QComboBox):
+    def showPopup(self):
+        super().showPopup()
+        self.popup_shown.emit()  # 发射自定义信号
+
+    popup_shown = pyqtSignal()
 
 
 class MainWindow(QMainWindow):
@@ -67,21 +77,21 @@ class MainWindow(QMainWindow):
         self.serial_port = None
         self.cnt = 0
         self.bits = ["115200", "2400", "4800", "9600", "19200", "38400", "57600"]
-        self.last_data=[0]
+        self.last_data = [0]
+        self.t = None
         # 初始化数据缓冲区
         # 主控件
         mainWidget = QWidget()
         self.setCentralWidget(mainWidget)
-
-        # 接收存储函数，防止遗漏数据
 
         # 布局
         layout = QVBoxLayout()
         mainWidget.setLayout(layout)
 
         # 串口选择下拉菜单
-        self.combobox = QComboBox()
+        self.combobox = PortBox()
         layout.addWidget(self.combobox)
+        self.combobox.popup_shown.connect(self.update_ports)
 
         self.bit_cm = QComboBox()
         layout.addWidget(self.bit_cm)
@@ -102,11 +112,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.save_button)
         self.save_button.clicked.connect(self.save_data)
 
-        # 更新检测串口
-        self.refresh_button = QPushButton("更新设备")
-        layout.addWidget(self.refresh_button)
-        self.refresh_button.clicked.connect(self.update_ports)
-
         # 用于显示数据的Matplotlib图表
         self.canvas = FigureCanvas(Figure(figsize=(5, 3)))
         layout.addWidget(self.canvas)
@@ -126,33 +131,38 @@ class MainWindow(QMainWindow):
     def update_ports(self):
         # 更新串口号
         ports = serial.tools.list_ports.comports()
-        if ports != self.ports:
-            self.combobox.clear()
-            for port in ports:
-                self.combobox.addItem(port.device)
+        self.combobox.clear()
+        for port in ports:
+            self.combobox.addItem(port.device)
 
     def open_serial_port(self):
         if not self.serial_port:
             port = self.combobox.currentText()
             bit = self.bit_cm.currentText()
             self.serial_port = serial.Serial("com15", 115200, timeout=3)
-            print("打开成功")
+            if self.serial_port:
+                print("打开成功")
+            else:
+                print("打开失败")
             self.t = WorkerThread(self.serial_port)
+            # self.t.btn_clicked.connect(self.open_serial_port)
             self.t.start_thread()
             self.button.setText("关闭串口")
             self.timer.start(20)  # 每20ms更新一次图表
+            # self.timer1.start(500);
+
+
         else:
             self.button.setText("打开串口")
-            self.last_data=self.data
+            self.last_data = self.data
             self.t.stop_thread()
             self.t.wait()
             self.serial_port.close()
             self.serial_port = None
             self.timer.stop()
 
-
     def update_plot(self):
-        self.data =self.last_data+self.t.buff
+        self.data = self.last_data + self.t.buff
         self.ax.clear()
         self.ax.plot(self.data)
         self.canvas.draw()

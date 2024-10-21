@@ -45,8 +45,3 @@ class PicWindow(QMainWindow):
     def open_serial_port(self):
         self.timer.start(50)
 
-if __name__ == "__main__":
-    app = QtWidgets.QApplication(sys.argv)
-    mainWin = PicWindow()
-    mainWin.show()
-    sys.exit(app.exec_())
