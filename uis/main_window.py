@@ -23,17 +23,17 @@ from scipy.constants import value
 
 from save_data import *
 from uis.dialog_window import PicWindow
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread
 
 
 class WorkerThread(QThread):
+    data_ready = pyqtSignal(list)
     def __init__(self, serial_port,nums):
-        super(WorkerThread, self).__init__(None)
+        super().__init__()
         self.running = False
         self.buff = []
         self.nums=nums
         self.serial_port = serial_port
-        self.btn_clicked = pyqtSignal()
         for i in range(self.nums):
             self.buff.append([])
     def run(self):
@@ -46,7 +46,6 @@ class WorkerThread(QThread):
                             data = data[2:]
                             data = data[0:-2]
                             data=data.split(',')
-                            print(data)
                             for i in range(self.nums):
                                 _value=float(data[i])
                                 if len(self.buff[i]) <= 10000:
@@ -54,9 +53,9 @@ class WorkerThread(QThread):
                                 else:
                                     self.buff[i] = self.buff[1:]
                                     self.buff[i] += [_value]
+                            self.data_ready.emit(self.buff)
                 except:
-                    pass
-                    #self.stop_thread()
+                    self.stop_thread()
     def start_thread(self):
         self.running = True
         if not self.isRunning():
@@ -79,6 +78,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.pic_list = []
         self.data = []
+        self.buff=[]
         self.setWindowTitle("串口数据可视化")
         self.setGeometry(100, 100, 1000, 800)
         self.serial_port = None
@@ -109,11 +109,6 @@ class MainWindow(QMainWindow):
         self.button = QPushButton("打开串口")
         layout.addWidget(self.button)
         self.button.clicked.connect(self.open_serial_port)
-
-        # 弹出图像的按钮
-        self.demo_button = QPushButton('点击我弹出窗口')
-        layout.addWidget(self.demo_button)
-        self.demo_button.clicked.connect(self.on_button_clicked)
 
         # 保存数据按钮
         self.save_button = QPushButton("保存数据")
@@ -150,7 +145,7 @@ class MainWindow(QMainWindow):
             port = self.combobox.currentText()
             bit = self.bit_cm.currentText()
             try:
-                self.serial_port = serial.Serial("com15", 115200, timeout=3)
+                self.serial_port = serial.Serial(port="com15",baudrate=115200, timeout=3)
             except:
                 print("弹出错误窗口")
             if self.serial_port:
@@ -171,7 +166,9 @@ class MainWindow(QMainWindow):
                 for i in range(self.nums):
                     self.last_data.append([])
                     self.data.append([])
+                    self.buff.append([])
             self.t = WorkerThread(self.serial_port, self.nums)
+            self.t.data_ready.connect(self.handle_data)
             self.t.start_thread()
             self.button.setText("关闭串口")
             #有几个数据就创建几个窗口
@@ -184,22 +181,23 @@ class MainWindow(QMainWindow):
             self.button.setText("打开串口")
             for i in range(self.nums):
                 self.last_data[i] = self.pic_list[i].data
+                self.pic_list[i].close()
             self.t.stop_thread()
             self.t.wait()
+            self.pic_list.clear()
             self.serial_port.close()
             self.serial_port = None
             self.timer.stop()
 
+    def handle_data(self, buff):
+        self.buff = buff
     def update_data(self):
         for i in range(self.nums):
-            self.data[i] = self.t.buff[i] + self.last_data[i]
+            self.data[i] = self.last_data[i]+self.buff[i]
             self.pic_list[i].set_data(self.data[i])
             self.pic_list[i].update_plot()
     def save_data(self):
         write_data(self.data)
 
-    def on_button_clicked(self):
-        self.pic = PicWindow()
-        self.pic.show()
 
 
