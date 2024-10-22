@@ -1,8 +1,8 @@
 import time
 all_data=[]
-data = "/*11,321*/"
-data = data[2:]
-data = data[0:-2]
+for i in range(3):
+    all_data.append(i)
+    print(all_data[i])
 
 # num = len(data)
 # for i in range(num):

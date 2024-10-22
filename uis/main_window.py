@@ -22,7 +22,7 @@ import random
 from scipy.constants import value
 
 from save_data import *
-from uis.dialog_window import *
+from uis.dialog_window import PicWindow
 from PyQt5.QtCore import QThread, pyqtSignal
 
 
@@ -46,6 +46,7 @@ class WorkerThread(QThread):
                             data = data[2:]
                             data = data[0:-2]
                             data=data.split(',')
+                            print(data)
                             for i in range(self.nums):
                                 _value=float(data[i])
                                 if len(self.buff[i]) <= 10000:
@@ -53,10 +54,9 @@ class WorkerThread(QThread):
                                 else:
                                     self.buff[i] = self.buff[1:]
                                     self.buff[i] += [_value]
-
                 except:
-                    self.stop_thread()
-
+                    pass
+                    #self.stop_thread()
     def start_thread(self):
         self.running = True
         if not self.isRunning():
@@ -77,8 +77,7 @@ class PortBox(QComboBox):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.pic = None
-        self.buff = []
+        self.pic_list = []
         self.data = []
         self.setWindowTitle("串口数据可视化")
         self.setGeometry(100, 100, 1000, 800)
@@ -125,8 +124,9 @@ class MainWindow(QMainWindow):
         self.canvas = FigureCanvas(Figure(figsize=(5, 3)))
         layout.addWidget(self.canvas)
         self.ax = self.canvas.figure.add_subplot(111)
+        #创建一个传输数据的定时器，每隔30ms更新一次数据
         self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.update_plot)
+        self.timer.timeout.connect(self.update_data)
 
         # 将串口添加到拉选框中
         self.ports = serial.tools.list_ports.comports()
@@ -161,6 +161,7 @@ class MainWindow(QMainWindow):
             if self.cnt==1:
                 if self.serial_port.isOpen():
                     data = self.serial_port.readline().decode().strip()
+                    print("开始读取数据")
                     # 读取数据确定数据长度
                     if data:
                         data = data[2:]
@@ -168,28 +169,32 @@ class MainWindow(QMainWindow):
                         data = data.split(",")
                         self.nums = len(data)
                 for i in range(self.nums):
-                    self.data.append([])
                     self.last_data.append([])
+                    self.data.append([])
             self.t = WorkerThread(self.serial_port, self.nums)
             self.t.start_thread()
             self.button.setText("关闭串口")
-            self.timer.start(20)  # 每20ms更新一次图表
+            #有几个数据就创建几个窗口
+            for i in range(self.nums):
+                self.pic_list.append(PicWindow())
+                self.pic_list[i].show()
+            self.timer.start(30)
+
         else:
             self.button.setText("打开串口")
             for i in range(self.nums):
-                self.last_data[i] = self.data[i]
+                self.last_data[i] = self.pic_list[i].data
             self.t.stop_thread()
             self.t.wait()
             self.serial_port.close()
             self.serial_port = None
             self.timer.stop()
 
-    def update_plot(self):
-        self.data[0] = self.last_data[0] + self.t.buff[0]
-        self.ax.clear()
-        self.ax.plot(self.data[0])
-        self.canvas.draw()
-
+    def update_data(self):
+        for i in range(self.nums):
+            self.data[i] = self.t.buff[i] + self.last_data[i]
+            self.pic_list[i].set_data(self.data[i])
+            self.pic_list[i].update_plot()
     def save_data(self):
         write_data(self.data)
 
