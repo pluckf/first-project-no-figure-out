@@ -6,18 +6,14 @@ from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QMainWindow, QVBoxLayout, QComboBox, QPushButton, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import numpy as np
 import threading
 import time
-import tkinter as tk
-from tkinter import ttk
 import serial
 import serial.tools.list_ports
 import time
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
-import random
 
 from scipy.constants import value
 
@@ -111,9 +107,9 @@ class MainWindow(QMainWindow):
         self.button.clicked.connect(self.open_serial_port)
 
         # 保存数据按钮
-        self.save_button = QPushButton("保存数据")
-        layout.addWidget(self.save_button)
-        self.save_button.clicked.connect(self.save_data)
+        # self.save_button = QPushButton("保存数据")
+        # layout.addWidget(self.save_button)
+        # self.save_button.clicked.connect(self.save_data)
 
         # 用于显示数据的Matplotlib图表
         self.canvas = FigureCanvas(Figure(figsize=(5, 3)))
@@ -145,7 +141,7 @@ class MainWindow(QMainWindow):
             port = self.combobox.currentText()
             bit = self.bit_cm.currentText()
             try:
-                self.serial_port = serial.Serial(port="com15",baudrate=115200, timeout=3)
+                self.serial_port = serial.Serial(port=port,baudrate=bit, timeout=3)
             except:
                 print("弹出错误窗口")
             if self.serial_port:
